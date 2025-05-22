@@ -1,49 +1,8 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs';
-import path from 'path';
-import Papa from 'papaparse'; // Import papaparse
 import bcrypt from 'bcrypt'; // Import bcrypt
+import redis from '../../../../lib/redis'; // Import Redis client
 
-const csvFilePath = path.join(process.cwd(), 'user_credentials.csv');
-const CSV_HEADER_EXPECTED = 'username,password_hash'; // Expected header
-
-// Helper function to read users from CSV using Papaparse
-async function readUsers() {
-  try {
-    if (!fs.existsSync(csvFilePath)) {
-      return []; // File doesn't exist, so no users
-    }
-    const fileContent = fs.readFileSync(csvFilePath, 'utf8');
-    const trimmedContent = fileContent.trim();
-
-    // Check if the file is empty or effectively empty (e.g., only whitespace or just the header)
-    if (!trimmedContent || trimmedContent.toLowerCase() === CSV_HEADER_EXPECTED.toLowerCase()) {
-        return [];
-    }
-
-    const result = Papa.parse(trimmedContent, {
-      header: true, // Treat the first row as headers
-      skipEmptyLines: true, // Skip any blank lines
-      transformHeader: header => header.toLowerCase().trim(), // Normalize headers
-    });
-
-    if (result.errors.length > 0) {
-      console.error('Papaparse parsing errors in login:', result.errors);
-      // Decide how to handle parsing errors. For now, we'll return what was parsed.
-    }
-    
-    // Ensure data is an array and process usernames and password hashes
-    const users = Array.isArray(result.data) ? result.data : [];
-    return users.map(user => ({
-      username: user.username ? user.username.toLowerCase().trim() : '',
-      password_hash: user.password_hash ? user.password_hash.trim() : '' // Read password_hash
-    })).filter(user => user.username && user.password_hash); // Filter out users with no username or hash
-
-  } catch (error) {
-    console.error('Error reading or parsing CSV file with Papaparse:', error);
-    return []; 
-  }
-}
+// CSV_HEADER_EXPECTED and readUsers function are no longer needed and can be removed.
 
 export async function POST(request) {
   try {
@@ -53,21 +12,29 @@ export async function POST(request) {
       return NextResponse.json({ message: 'Name and password are required' }, { status: 400 });
     }
 
-    const users = await readUsers();
     const lowerCaseName = name.trim().toLowerCase();
 
-    const user = users.find(u => u.username === lowerCaseName);
+    // Check if username exists in the 'usernames' set
+    const userExists = await redis.sismember('usernames', lowerCaseName);
+    if (!userExists) {
+      console.log(`Login attempt: User '${lowerCaseName}' not found in Redis set.`);
+      return NextResponse.json({ message: 'Invalid credentials' }, { status: 401 });
+    }
 
-    if (!user) {
-      console.log(`Login attempt: User '${lowerCaseName}' not found.`);
+    // Retrieve user data (which includes the password hash) from Redis
+    const userData = await redis.hgetall(`user:${lowerCaseName}`);
+
+    if (!userData || !userData.password_hash) {
+      // This case should ideally not be reached if sismember check passes and data is consistent
+      console.log(`Login attempt: User '${lowerCaseName}' found in set but no hash found in Redis.`);
       return NextResponse.json({ message: 'Invalid credentials' }, { status: 401 });
     }
 
     // Compare the provided password with the stored hash
-    const passwordMatches = await bcrypt.compare(inputPassword, user.password_hash);
+    const passwordMatches = await bcrypt.compare(inputPassword, userData.password_hash);
 
     if (passwordMatches) {
-      return NextResponse.json({ message: 'Login successful', user: { name: user.username } }, { status: 200 });
+      return NextResponse.json({ message: 'Login successful', user: { name: lowerCaseName } }, { status: 200 });
     } else {
       console.log(`Login attempt: Password mismatch for user '${lowerCaseName}'.`);
       return NextResponse.json({ message: 'Invalid credentials' }, { status: 401 });
@@ -75,6 +42,10 @@ export async function POST(request) {
 
   } catch (error) {
     console.error('Login API error:', error);
+    // Check if the error is a Redis connection error
+    if (error.message && error.message.includes('Redis connection')) {
+        return NextResponse.json({ message: 'Could not connect to the database. Please try again later.' }, { status: 503 });
+    }
     const errorMessage = error instanceof Error ? error.message : 'An internal server error occurred.';
     return NextResponse.json({ message: errorMessage }, { status: 500 });
   }
