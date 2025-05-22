@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image"; // Import next/image
 
 export default function HomePage() {
   const [mottos, setMottos] = useState([]);
@@ -218,9 +219,9 @@ export default function HomePage() {
               Login/Register
             </Link>
           )}
-          <Link href="/game" className="px-4 py-2 bg-white text-purple-600 rounded-lg font-semibold hover:bg-opacity-90 transition-colors">
+          {/* <Link href="/game" className="px-4 py-2 bg-white text-purple-600 rounded-lg font-semibold hover:bg-opacity-90 transition-colors">
             Play Minigame
-          </Link>
+          </Link> */}
         </div>
       </nav>
 
@@ -239,7 +240,7 @@ export default function HomePage() {
               <p className="text-xl text-yellow-200 animate-pulse">Checking your motto status...</p>
             ) : userMotto ? (
               <p className="text-xl text-pink-200">
-                You submitted: <strong className="font-semibold">"{userMotto.text}"</strong>
+                You submitted: <strong className="font-semibold">&quot;{userMotto.text}&quot;</strong>
                 {!raffledMotto && (
                   <>
                     <br />
@@ -281,10 +282,12 @@ export default function HomePage() {
             {raffleError && <p className="text-red-300 bg-red-800 bg-opacity-70 p-2 rounded-md text-sm mb-3">{raffleError}</p>}
             {raffledMotto ? (
               <div className="mt-6 flex flex-row items-center justify-center space-x-2 sm:space-x-4"> {/* MODIFIED: flex-row, justify-center, space-x */}
-                <img 
+                <Image 
                   src="/chibi_speaker.svg" 
                   alt="Chibi with speaking hat" 
                   className="w-28 h-28 sm:w-36 sm:h-36 object-contain drop-shadow-lg flex-shrink-0" // Slightly smaller, ensure it doesn't shrink
+                  width={144} // Added width (based on sm:w-36 which is 9rem = 144px)
+                  height={144} // Added height (based on sm:h-36 which is 9rem = 144px)
                 />
                 <div className="relative bg-white text-black p-4 sm:p-5 rounded-2xl shadow-xl border-2 border-black max-w-xs w-full text-left sm:text-center"> {/* MODIFIED: rounded-2xl, border-2 border-black */}
                   {/* Left pointing triangle tail for the speech bubble */}
@@ -311,7 +314,7 @@ export default function HomePage() {
                   <p className="text-sm sm:text-base leading-relaxed font-medium"> {/* MODIFIED: Adjusted text styling slightly */}
                     Your party fit is going to be: <br />
                     <strong className="block text-lg sm:text-xl text-pink-600 my-1 sm:my-2 animate-pulse"> {/* Keep motto text color distinct */}
-                      "{raffledMotto}"
+                      &quot;{raffledMotto}&quot;
                     </strong>
                     Go slay!
                   </p>
